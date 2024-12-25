@@ -1,61 +1,74 @@
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+--[[
+	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
+]]
+local players = game:GetService("Players")
+local localPlayer = players.LocalPlayer
+local camera = workspace.CurrentCamera
+local runService = game:GetService("RunService")
 
-local localPlayer = Players.LocalPlayer
-local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
-local rootPart = character:WaitForChild("HumanoidRootPart")
-
-local espColor = Color3.new(0, 1, 0) -- Green outline
-
-local function createOutline(targetCharacter)
-    if not targetCharacter or not targetCharacter:FindFirstChild("HumanoidRootPart") then return end
-
-    local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
-
-    local billboardGui = Instance.new("BillboardGui")
-    billboardGui.AlwaysOnTop = true
-    billboardGui.Size = UDim2.new(1, 0, 1, 0) -- Head size
-    billboardGui.StudsOffset = Vector3.new(0, 2, 0)
-    billboardGui.Parent = targetRoot
-
-    local outlineFrame = Instance.new("Frame")
-    outlineFrame.Size = UDim2.new(1, 0, 1, 0) -- same as BillboardGui
-    outlineFrame.BorderSizePixel = 2
-    outlineFrame.BackgroundTransparency = 1
-    outlineFrame.BorderColor3 = espColor
-    outlineFrame.Parent = billboardGui
-
-    return billboardGui
+-- Function to create a Drawing text
+local function createText()
+    local text = Drawing.new("Text")
+    text.Size = 18
+    text.Outline = true
+    text.Center = true
+    text.Visible = false
+    return text
 end
 
-local outlines = {}
+-- Table to hold the Drawing texts for each player
+local playerText = {}
 
-local function updateOutlines()
-    if not localPlayer or not localPlayer.Character or not rootPart then return end
-    local currentPlayers = Players:GetPlayers()
-    for _, player in ipairs(currentPlayers) do
-        if player ~= localPlayer then
-            local targetCharacter = player.Character
-            if targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart") then
-                if not outlines[player] then
-                  outlines[player] = createOutline(targetCharacter)
-                  if not outlines[player] then
-                      outlines[player] = nil
-                  end
+-- Function to generate rainbow colors
+local function rainbowColor(frequency)
+    local r = math.floor(math.sin(frequency + 0) * 127 + 128)
+    local g = math.floor(math.sin(frequency + 2) * 127 + 128)
+    local b = math.floor(math.sin(frequency + 4) * 127 + 128)
+    return Color3.fromRGB(r, g, b)
+end
+
+-- Update the Drawing texts
+local function updateTexts()
+    local time = tick()
+    for _, player in pairs(players:GetPlayers()) do
+        if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local rootPart = player.Character.HumanoidRootPart
+            local head = player.Character:FindFirstChild("Head")
+            if head then
+                local screenPos, onScreen = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 2, 0))
+                
+                if onScreen then
+                    local distance = (localPlayer.Character.HumanoidRootPart.Position - rootPart.Position).magnitude
+                    local text = playerText[player]
+                    
+                    if not text then
+                        text = createText()
+                        playerText[player] = text
+                    end
+                    
+                    text.Position = Vector2.new(screenPos.X, screenPos.Y)
+                    text.Text = player.Name .. " | " .. math.floor(distance) .. " studs"
+                    text.Color = rainbowColor(time + player.UserId)
+                    text.Visible = true
+                else
+                    if playerText[player] then
+                        playerText[player].Visible = false
+                    end
                 end
-            else
-              if outlines[player] then
-                  outlines[player]:Destroy()
-                  outlines[player] = nil
-               end
             end
+        elseif playerText[player] then
+            playerText[player].Visible = false
         end
     end
-   for player, gui in pairs(outlines) do
-       if not Players:GetPlayerFromCharacter(gui.Parent.Parent) then
-            gui:Destroy()
-            outlines[player] = nil
-        end
-    end
-
 end
+
+-- Update the texts every frame
+runService.RenderStepped:Connect(updateTexts)
+
+-- Clean up when a player leaves
+players.PlayerRemoving:Connect(function(player)
+    if playerText[player] then
+        playerText[player]:Remove()
+        playerText[player] = nil
+    end
+end)
